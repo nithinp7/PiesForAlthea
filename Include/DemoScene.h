@@ -14,9 +14,12 @@
 #include <Althea/TransientUniforms.h>
 #include <Althea/Texture.h>
 #include <Althea/ImageBasedLighting.h>
+#include <Althea/DynamicVertexBuffer.h>
+
 #include <glm/glm.hpp>
 
 #include <vector>
+#include <memory>
 
 using namespace AltheaEngine;
 
@@ -25,6 +28,9 @@ class Application;
 } // namespace AltheaEngine
 
 namespace PiesForAlthea {
+struct Vertex {
+  glm::vec3 pos;
+};
 
 // TODO: move this into engine
 struct GlobalUniforms {
@@ -68,6 +74,8 @@ private:
   std::unique_ptr<RenderPass> _pRenderPass;
 
   std::vector<Model> _models;
+
+  std::unique_ptr<DynamicVertexBuffer<Vertex>> _pDynamicVertexBuffer;
   
   AltheaEngine::IBLResources _iblResources;
 };

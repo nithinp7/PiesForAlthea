@@ -93,7 +93,7 @@ void DemoScene::createRenderState(Application& app) {
   SingleTimeCommandBuffer commandBuffer(app);
 
   this->_iblResources =
-      ImageBasedLighting::createResources(app, commandBuffer, "LuxuryRoom");
+      ImageBasedLighting::createResources(app, commandBuffer, "NeoclassicalInterior");
 
   // TODO: Default color and depth-stencil clear values for attachments?
   VkClearValue colorClear;
@@ -172,12 +172,29 @@ void DemoScene::createRenderState(Application& app) {
         .addDescriptorSet(this->_pGltfMaterialAllocator->getLayout());
   }
 
+  // DYNAMIC VERTEX BUFFER TEST PASS
+  {
+    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+    subpassBuilder.colorAttachments.push_back(0);
+    subpassBuilder.depthAttachment = 1;
+
+    subpassBuilder.pipelineBuilder.setPrimitiveType(PrimitiveType::LINES)
+        .addVertexInputBinding<Vertex>()
+        .addVertexAttribute(VertexAttributeType::VEC3, offsetof(Vertex, pos))
+
+        .addVertexShader(GProjectDirectory + "/Shaders/Lines.vert")
+        .addFragmentShader(GProjectDirectory + "/Shaders/Lines.frag")
+
+        .layoutBuilder.addDescriptorSet(this->_pGlobalResources->getLayout());
+
+    this->_pDynamicVertexBuffer =
+        std::make_unique<DynamicVertexBuffer<Vertex>>(app, commandBuffer, 8);
+  }
+
   this->_pRenderPass = std::make_unique<RenderPass>(
       app,
       std::move(attachments),
       std::move(subpassBuilders));
-
-  std::vector<Subpass>& subpasses = this->_pRenderPass->getSubpasses();
 
   this->_models.emplace_back(
       app,
@@ -228,6 +245,8 @@ void DemoScene::destroyRenderState(Application& app) {
   this->_pGlobalUniforms.reset();
   this->_pGltfMaterialAllocator.reset();
   this->_iblResources = {};
+
+  this->_pDynamicVertexBuffer.reset();
 }
 
 void DemoScene::tick(Application& app, const FrameContext& frame) {
@@ -262,6 +281,20 @@ void DemoScene::draw(
     VkCommandBuffer commandBuffer,
     const FrameContext& frame) {
 
+  // TEST UPDATE DYNAMIC VERTEX BUFFER
+  float scale = static_cast<float>(sin(frame.currentTime)) + 2.0f;
+
+  Vertex lineVerts[8];
+  for (int i = 0; i < 4; ++i) {
+    lineVerts[2 * i].pos = glm::vec3(scale * i, -2.0f, 0.0f);
+    lineVerts[2 * i + 1].pos = glm::vec3(scale * (i + 1), -2.0f, 0.0f);
+  }
+
+  this->_pDynamicVertexBuffer->updateVertices(
+      app,
+      commandBuffer,
+      gsl::span<const Vertex>(lineVerts, 8));
+
   VkDescriptorSet globalDescriptorSet =
       this->_pGlobalResources->getCurrentDescriptorSet(frame);
 
@@ -276,5 +309,15 @@ void DemoScene::draw(
   for (const Model& model : this->_models) {
     pass.draw(model);
   }
+
+  pass.nextSubpass();
+  pass.getDrawContext().bindDescriptorSets();
+  this->_pDynamicVertexBuffer->bind(app, commandBuffer);
+  vkCmdDraw(
+      commandBuffer,
+      static_cast<uint32_t>(this->_pDynamicVertexBuffer->getVertexCount()),
+      1,
+      0,
+      0);
 }
-} // namespace AltheaDemo
+} // namespace PiesForAlthea
