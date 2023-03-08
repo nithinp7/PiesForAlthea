@@ -79,6 +79,8 @@ void DemoScene::initGame(Application& app) {
           lightDir = glm::normalize(glm::vec3(cos(theta), height, sin(theta)));
         }
       });
+
+  Simulation::initInputBindings(input);
 }
 
 void DemoScene::shutdownGame(Application& app) {
@@ -92,8 +94,10 @@ void DemoScene::createRenderState(Application& app) {
 
   SingleTimeCommandBuffer commandBuffer(app);
 
-  this->_iblResources =
-      ImageBasedLighting::createResources(app, commandBuffer, "NeoclassicalInterior");
+  this->_iblResources = ImageBasedLighting::createResources(
+      app,
+      commandBuffer,
+      "NeoclassicalInterior");
 
   // TODO: Default color and depth-stencil clear values for attachments?
   VkClearValue colorClear;
@@ -172,23 +176,17 @@ void DemoScene::createRenderState(Application& app) {
         .addDescriptorSet(this->_pGltfMaterialAllocator->getLayout());
   }
 
-  // DYNAMIC VERTEX BUFFER TEST PASS
+  // SIMULATION SUB PASS
   {
     SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
     subpassBuilder.colorAttachments.push_back(0);
     subpassBuilder.depthAttachment = 1;
 
-    subpassBuilder.pipelineBuilder.setPrimitiveType(PrimitiveType::LINES)
-        .addVertexInputBinding<Vertex>()
-        .addVertexAttribute(VertexAttributeType::VEC3, offsetof(Vertex, pos))
-
-        .addVertexShader(GProjectDirectory + "/Shaders/Lines.vert")
-        .addFragmentShader(GProjectDirectory + "/Shaders/Lines.frag")
-
-        .layoutBuilder.addDescriptorSet(this->_pGlobalResources->getLayout());
-
-    this->_pDynamicVertexBuffer =
-        std::make_unique<DynamicVertexBuffer<Vertex>>(app, commandBuffer, 8);
+    Simulation::buildPipeline(subpassBuilder.pipelineBuilder);
+    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
+        this->_pGlobalResources->getLayout());
+    
+    this->_pSimulation = std::make_unique<Simulation>(app, commandBuffer);
   }
 
   this->_pRenderPass = std::make_unique<RenderPass>(
@@ -196,30 +194,30 @@ void DemoScene::createRenderState(Application& app) {
       std::move(attachments),
       std::move(subpassBuilders));
 
-  this->_models.emplace_back(
-      app,
-      commandBuffer,
-      GEngineDirectory + "/Content/Models/DamagedHelmet.glb",
-      *this->_pGltfMaterialAllocator);
-  this->_models.back().setModelTransform(
-      glm::translate(glm::mat4(1.0f), glm::vec3(6.0f, 0.0f, 0.0f)));
+  // this->_models.emplace_back(
+  //     app,
+  //     commandBuffer,
+  //     GEngineDirectory + "/Content/Models/DamagedHelmet.glb",
+  //     *this->_pGltfMaterialAllocator);
+  // this->_models.back().setModelTransform(
+  //     glm::translate(glm::mat4(1.0f), glm::vec3(6.0f, 0.0f, 0.0f)));
 
-  this->_models.emplace_back(
-      app,
-      commandBuffer,
-      GEngineDirectory + "/Content/Models/FlightHelmet/FlightHelmet.gltf",
-      *this->_pGltfMaterialAllocator);
-  this->_models.back().setModelTransform(glm::scale(
-      glm::translate(glm::mat4(1.0f), glm::vec3(8.0f, -1.0f, 0.0f)),
-      glm::vec3(4.0f)));
+  // this->_models.emplace_back(
+  //     app,
+  //     commandBuffer,
+  //     GEngineDirectory + "/Content/Models/FlightHelmet/FlightHelmet.gltf",
+  //     *this->_pGltfMaterialAllocator);
+  // this->_models.back().setModelTransform(glm::scale(
+  //     glm::translate(glm::mat4(1.0f), glm::vec3(8.0f, -1.0f, 0.0f)),
+  //     glm::vec3(4.0f)));
 
-  this->_models.emplace_back(
-      app,
-      commandBuffer,
-      GEngineDirectory + "/Content/Models/MetalRoughSpheres.glb",
-      *this->_pGltfMaterialAllocator);
-  this->_models.back().setModelTransform(
-      glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f)));
+  // this->_models.emplace_back(
+  //     app,
+  //     commandBuffer,
+  //     GEngineDirectory + "/Content/Models/MetalRoughSpheres.glb",
+  //     *this->_pGltfMaterialAllocator);
+  // this->_models.back().setModelTransform(
+  //     glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f)));
 
   // this->_models.emplace_back(
   //     app,
@@ -245,8 +243,7 @@ void DemoScene::destroyRenderState(Application& app) {
   this->_pGlobalUniforms.reset();
   this->_pGltfMaterialAllocator.reset();
   this->_iblResources = {};
-
-  this->_pDynamicVertexBuffer.reset();
+  this->_pSimulation.reset();
 }
 
 void DemoScene::tick(Application& app, const FrameContext& frame) {
@@ -265,6 +262,8 @@ void DemoScene::tick(Application& app, const FrameContext& frame) {
   globalUniforms.exposure = 0.3f;
 
   this->_pGlobalUniforms->updateUniforms(globalUniforms, frame);
+
+  this->_pSimulation->tick(app, frame.deltaTime);
 }
 
 namespace {
@@ -280,20 +279,6 @@ void DemoScene::draw(
     Application& app,
     VkCommandBuffer commandBuffer,
     const FrameContext& frame) {
-
-  // TEST UPDATE DYNAMIC VERTEX BUFFER
-  float scale = static_cast<float>(sin(frame.currentTime)) + 2.0f;
-
-  Vertex lineVerts[8];
-  for (int i = 0; i < 4; ++i) {
-    lineVerts[2 * i].pos = glm::vec3(scale * i, -2.0f, 0.0f);
-    lineVerts[2 * i + 1].pos = glm::vec3(scale * (i + 1), -2.0f, 0.0f);
-  }
-
-  this->_pDynamicVertexBuffer->updateVertices(
-      app,
-      commandBuffer,
-      gsl::span<const Vertex>(lineVerts, 8));
 
   VkDescriptorSet globalDescriptorSet =
       this->_pGlobalResources->getCurrentDescriptorSet(frame);
@@ -311,13 +296,6 @@ void DemoScene::draw(
   }
 
   pass.nextSubpass();
-  pass.getDrawContext().bindDescriptorSets();
-  this->_pDynamicVertexBuffer->bind(app, commandBuffer);
-  vkCmdDraw(
-      commandBuffer,
-      static_cast<uint32_t>(this->_pDynamicVertexBuffer->getVertexCount()),
-      1,
-      0,
-      0);
+  pass.draw(*this->_pSimulation);
 }
 } // namespace PiesForAlthea

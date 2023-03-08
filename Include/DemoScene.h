@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Simulation.h"
+
 #include <Althea/Allocator.h>
 #include <Althea/CameraController.h>
 #include <Althea/ComputePipeline.h>
@@ -14,7 +16,6 @@
 #include <Althea/TransientUniforms.h>
 #include <Althea/Texture.h>
 #include <Althea/ImageBasedLighting.h>
-#include <Althea/DynamicVertexBuffer.h>
 
 #include <glm/glm.hpp>
 
@@ -75,8 +76,8 @@ private:
 
   std::vector<Model> _models;
 
-  std::unique_ptr<DynamicVertexBuffer<Vertex>> _pDynamicVertexBuffer;
-  
+  std::unique_ptr<Simulation> _pSimulation;
+
   AltheaEngine::IBLResources _iblResources;
 };
 } // namespace PiesForAlthea
