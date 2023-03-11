@@ -27,8 +27,6 @@ endfunction()
 glob_files(SRC_FILES_LIST Src/*.cpp)
 add_executable(PiesForAlthea ${SRC_FILES_LIST})
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE MAX_UV_COORDS=4)
-
 add_subdirectory(Extern/Althea)
 # if (MSVC)
 #     target_compile_options(${targetName} PRIVATE /W4 /WX /wd4201 /bigobj)

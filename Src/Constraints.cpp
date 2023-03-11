@@ -20,7 +20,11 @@ void DistanceConstraintProjection::operator()(
 }
 
 DistanceConstraint createDistanceConstraint(uint32_t id, Node* a, Node* b) {
-  return DistanceConstraint(id, {glm::length(b->position - a->position)}, {a, b});
+  return DistanceConstraint(
+      id,
+      1.0f,
+      {glm::length(b->position - a->position)},
+      {a, b});
 }
 
 void PositionConstraintProjection::operator()(
@@ -30,6 +34,6 @@ void PositionConstraintProjection::operator()(
 }
 
 PositionConstraint createPositionConstraint(uint32_t id, Node* node) {
-  return PositionConstraint(id, {node->position}, {node});
+  return PositionConstraint(id, 1.0f, {node->position}, {node});
 }
 } // namespace PiesForAlthea

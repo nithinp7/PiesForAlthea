@@ -2,15 +2,16 @@
 
 #include <Althea/FrameContext.h>
 
-#define GRID_WIDTH 5
-#define GRID_HEIGHT 5
-#define GRID_DEPTH 5
+#define GRID_WIDTH 10
+#define GRID_HEIGHT 10
+#define GRID_DEPTH 10
 
 #define GRAVITY 10.0f
 
 #define DAMPING 0.001f
+#define FRICTION 0.1f
 
-#define SOLVER_ITERS 80
+#define SOLVER_ITERS 4
 
 using namespace AltheaEngine;
 
@@ -62,7 +63,7 @@ Simulation::Simulation(
     const Application& app,
     SingleTimeCommandBuffer& commandBuffer) {
   glm::vec3 posOffs = glm::vec3(-10.0f, 5.0f, 0.0f);
-  float scale = 1.0f;
+  float scale = 0.5f;
 
   uint32_t constraintId = 0;
 
@@ -148,6 +149,11 @@ Simulation::Simulation(
     }
   }
 
+  for (DistanceConstraint& constraint : this->_distanceConstraints) {
+    float k = 1.0f;
+    constraint.setWeight(1.0f - powf(1.0f - k, 1.0f / SOLVER_ITERS));
+  }
+
   std::vector<uint32_t> indices;
   indices.resize(2 * this->_distanceConstraints.size());
   for (size_t i = 0; i < this->_distanceConstraints.size(); ++i) {
@@ -167,38 +173,48 @@ Simulation::Simulation(
 }
 
 void Simulation::tick(const Application& app, float /*deltaTime*/) {
-  float deltaTime = 0.01f;
-  // Apply external forces and advect nodes
-  for (Node& node : this->_nodes) {
-    node.velocity += glm::vec3(0.0f, -GRAVITY, 0.0f) * deltaTime;
-    node.position += node.velocity * deltaTime;
-  }
+  float deltaTime = 0.005f;
 
-  for (uint32_t i = 0; i < SOLVER_ITERS; ++i) {
-    if (!releaseHinge) {
-      for (PositionConstraint& constraint : this->_positionConstraints) {
+  // Time substeps
+  for (int substep = 0; substep < 10; ++substep) {
+    // Apply external forces and advect nodes
+    for (Node& node : this->_nodes) {
+      node.velocity += glm::vec3(0.0f, -GRAVITY, 0.0f) * deltaTime;
+      node.position += node.velocity * deltaTime;
+    }
+
+    for (uint32_t i = 0; i < SOLVER_ITERS; ++i) {
+      if (!releaseHinge) {
+        for (PositionConstraint& constraint : this->_positionConstraints) {
+          constraint.projectNodePositions();
+        }
+      }
+
+      for (DistanceConstraint& constraint : this->_distanceConstraints) {
         constraint.projectNodePositions();
       }
-    }
 
-    for (DistanceConstraint& constraint : this->_distanceConstraints) {
-      constraint.projectNodePositions();
-    }
-
-    // Floor constraint
-    for (Node& node : this->_nodes) {
-      if (node.position.y < -8.0f) {
-        node.position.y = -8.0f;
+      // Floor constraint
+      for (Node& node : this->_nodes) {
+        if (node.position.y < -8.0f) {
+          node.position.y = -8.0f;
+        }
       }
     }
-  }
 
-  // Compute new velocity and construct new vertex positions
-  for (uint32_t i = 0; i < this->_nodes.size(); ++i) {
-    this->_nodes[i].velocity = (1.0f - DAMPING) *
-                               (this->_nodes[i].position - this->_vertices[i]) /
-                               deltaTime;
-    this->_vertices[i] = this->_nodes[i].position;
+    // Compute new velocity and construct new vertex positions
+    for (uint32_t i = 0; i < this->_nodes.size(); ++i) {
+      this->_nodes[i].velocity = (1.0f - DAMPING) *
+                                (this->_nodes[i].position - this->_vertices[i]) /
+                                deltaTime;
+
+      if (this->_nodes[i].position.y <= -8.0f) {
+        this->_nodes[i].velocity.x *= 1.0f - FRICTION;
+        this->_nodes[i].velocity.z *= 1.0f - FRICTION;
+      }
+
+      this->_vertices[i] = this->_nodes[i].position;
+    }
   }
 
   this->_vertexBuffer.updateVertices(
