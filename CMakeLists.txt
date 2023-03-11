@@ -27,11 +27,17 @@ endfunction()
 glob_files(SRC_FILES_LIST Src/*.cpp)
 add_executable(PiesForAlthea ${SRC_FILES_LIST})
 
+# TODO: Why is this needed here?
+target_compile_definitions(${PROJECT_NAME} PRIVATE MAX_UV_COORDS=4)
+
 add_subdirectory(Extern/Althea)
+add_subdirectory(Extern/Pies)
+
 # if (MSVC)
 #     target_compile_options(${targetName} PRIVATE /W4 /WX /wd4201 /bigobj)
 # else()
 #     target_compile_options(${targetName} PRIVATE -Werror -Wall -Wextra -Wconversion -Wpedantic -Wshadow -Wsign-conversion)
 # endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC Althea)
+target_link_libraries(${PROJECT_NAME} PUBLIC Pies)
 

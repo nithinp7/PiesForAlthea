@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Node.h"
-#include "Constraints.h"
+#include <Pies/Solver.h>
 
 #include <Althea/Application.h>
 #include <Althea/DrawContext.h>
@@ -13,6 +12,7 @@
 
 #include <vector>
 
+using namespace Pies;
 using namespace AltheaEngine;
 
 namespace PiesForAlthea {
@@ -31,13 +31,8 @@ public:
   void draw(const DrawContext& context) const;
 
 private:
-  std::vector<Node> _nodes;
-  std::vector<PositionConstraint> _positionConstraints;
-  std::vector<DistanceConstraint> _distanceConstraints;
+  Solver _solver;
   DynamicVertexBuffer<glm::vec3> _vertexBuffer;
   IndexBuffer _indexBuffer;
-  
-  // Scratch vertices vector to avoid reallocation
-  std::vector<glm::vec3> _vertices;
 };
 } // namespace PiesForAlthea
