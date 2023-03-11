@@ -1,3 +1,6 @@
 [submodule "Extern/Althea"]
 	path = Extern/Althea
 	url = https://github.com/nithinp7/Althea
+[submodule "Extern/Pies"]
+	path = Extern/Pies
+	url = git@github.com:nithinp7/Pies.git
