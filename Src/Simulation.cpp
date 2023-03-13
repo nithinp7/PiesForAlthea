@@ -38,11 +38,13 @@ void Simulation::buildPipelineTriangles(GraphicsPipelineBuilder& builder) {
 
 Simulation::Simulation(
     const Application& app,
-    SingleTimeCommandBuffer& commandBuffer)
-    : _solver() {
+    SingleTimeCommandBuffer& commandBuffer) {
+  SolverOptions solverOptions{};
+  this->_solver = Solver(solverOptions);
 
-  std::vector<uint32_t> indices = this->_solver.getDistanceConstraintLines();
-  this->_linesIndexBuffer = IndexBuffer(app, commandBuffer, std::move(indices));
+  std::vector<uint32_t> lineIndices = this->_solver.getLines();
+  this->_linesIndexBuffer =
+      IndexBuffer(app, commandBuffer, std::move(lineIndices));
 
   std::vector<uint32_t> triIndices = this->_solver.getTriangles();
   this->_trianglesIndexBuffer =
