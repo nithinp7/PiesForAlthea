@@ -19,7 +19,8 @@ namespace PiesForAlthea {
 class Simulation {
 public:
   static void initInputBindings(InputManager& inputManager);
-  static void buildPipeline(GraphicsPipelineBuilder& builder);
+  static void buildPipelineLines(GraphicsPipelineBuilder& builder);
+  static void buildPipelineTriangles(GraphicsPipelineBuilder& builder);
 
   Simulation(
       const Application& app,
@@ -28,11 +29,13 @@ public:
   void tick(
       const Application& app,
       float deltaTime);
-  void draw(const DrawContext& context) const;
+  void drawLines(const DrawContext& context) const;
+  void drawTriangles(const DrawContext& context) const;
 
 private:
   Solver _solver;
   DynamicVertexBuffer<glm::vec3> _vertexBuffer;
-  IndexBuffer _indexBuffer;
+  IndexBuffer _linesIndexBuffer;
+  IndexBuffer _trianglesIndexBuffer;
 };
 } // namespace PiesForAlthea
