@@ -4,6 +4,9 @@
 
 layout(location=0) in vec3 worldPos;
 layout(location=1) in vec3 direction;
+layout(location=2) in vec3 baseColor;
+layout(location=3) in float roughness;
+layout(location=4) in float metallic;
 
 layout(location=0) out vec4 color;
 
@@ -28,10 +31,6 @@ void main() {
   vec3 dFdxPos = dFdx(worldPos);
   vec3 dFdyPos = dFdy(worldPos);
   vec3 normal = normalize(cross(dFdxPos,dFdyPos));
-
-  vec3 baseColor = vec3(10.0, 0.0, 0.0);
-  float roughness = 0.1;
-  float metallic = 0.0;
 
   float ambientOcclusion = 1.0;
 

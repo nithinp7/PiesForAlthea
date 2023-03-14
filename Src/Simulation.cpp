@@ -18,8 +18,11 @@ void Simulation::initInputBindings(InputManager& inputManager) {
 /*static*/
 void Simulation::buildPipelineLines(GraphicsPipelineBuilder& builder) {
   builder.setPrimitiveType(PrimitiveType::LINES)
-      .addVertexInputBinding<glm::vec3>()
-      .addVertexAttribute(VertexAttributeType::VEC3, 0)
+      .addVertexInputBinding<Solver::Vertex>()
+      .addVertexAttribute(VertexAttributeType::VEC3, offsetof(Solver::Vertex, position))
+      .addVertexAttribute(VertexAttributeType::VEC3, offsetof(Solver::Vertex, baseColor))
+      .addVertexAttribute(VertexAttributeType::FLOAT, offsetof(Solver::Vertex, roughness))
+      .addVertexAttribute(VertexAttributeType::FLOAT, offsetof(Solver::Vertex, metallic))
 
       .addVertexShader(GProjectDirectory + "/Shaders/Lines.vert")
       .addFragmentShader(GProjectDirectory + "/Shaders/Lines.frag");
@@ -28,8 +31,11 @@ void Simulation::buildPipelineLines(GraphicsPipelineBuilder& builder) {
 /*static*/
 void Simulation::buildPipelineTriangles(GraphicsPipelineBuilder& builder) {
   builder.setPrimitiveType(PrimitiveType::TRIANGLES)
-      .addVertexInputBinding<glm::vec3>()
-      .addVertexAttribute(VertexAttributeType::VEC3, 0)
+      .addVertexInputBinding<Solver::Vertex>()
+      .addVertexAttribute(VertexAttributeType::VEC3, offsetof(Solver::Vertex, position))
+      .addVertexAttribute(VertexAttributeType::VEC3, offsetof(Solver::Vertex, baseColor))
+      .addVertexAttribute(VertexAttributeType::FLOAT, offsetof(Solver::Vertex, roughness))
+      .addVertexAttribute(VertexAttributeType::FLOAT, offsetof(Solver::Vertex, metallic))
       .setCullMode(VK_CULL_MODE_NONE)
 
       .addVertexShader(GProjectDirectory + "/Shaders/Triangles.vert")
@@ -49,7 +55,7 @@ Simulation::Simulation(
   std::vector<uint32_t> triIndices = this->_solver.getTriangles();
   this->_trianglesIndexBuffer =
       IndexBuffer(app, commandBuffer, std::move(triIndices));
-  this->_vertexBuffer = DynamicVertexBuffer<glm::vec3>(
+  this->_vertexBuffer = DynamicVertexBuffer<Solver::Vertex>(
       app,
       commandBuffer,
       this->_solver.getVertices().size());

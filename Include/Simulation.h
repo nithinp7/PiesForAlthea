@@ -34,7 +34,7 @@ public:
 
 private:
   Solver _solver;
-  DynamicVertexBuffer<glm::vec3> _vertexBuffer;
+  DynamicVertexBuffer<Solver::Vertex> _vertexBuffer;
   IndexBuffer _linesIndexBuffer;
   IndexBuffer _trianglesIndexBuffer;
 };
