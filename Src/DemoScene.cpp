@@ -80,17 +80,21 @@ void DemoScene::initGame(Application& app) {
         }
       });
 
-  Simulation::initInputBindings(input);
+  this->_pSimulation = std::make_unique<Simulation>();
+  this->_pSimulation->initInputBindings(input);
 }
 
 void DemoScene::shutdownGame(Application& app) {
   this->_pCameraController.reset();
+  this->_pSimulation.reset();
 }
 
 void DemoScene::createRenderState(Application& app) {
   const VkExtent2D& extent = app.getSwapChainExtent();
   this->_pCameraController->getCamera().setAspectRatio(
       (float)extent.width / (float)extent.height);
+
+  this->_pSimulation->createRenderState(app);
 
   SingleTimeCommandBuffer commandBuffer(app);
 
@@ -185,8 +189,6 @@ void DemoScene::createRenderState(Application& app) {
     Simulation::buildPipelineLines(subpassBuilder.pipelineBuilder);
     subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
         this->_pGlobalResources->getLayout());
-
-    this->_pSimulation = std::make_unique<Simulation>(app, commandBuffer);
   }
 
   // SIMULATION SUB PASS (TRIANGLES)
@@ -254,7 +256,7 @@ void DemoScene::destroyRenderState(Application& app) {
   this->_pGlobalUniforms.reset();
   this->_pGltfMaterialAllocator.reset();
   this->_iblResources = {};
-  this->_pSimulation.reset();
+  this->_pSimulation->destroyRenderState(app);
 }
 
 void DemoScene::tick(Application& app, const FrameContext& frame) {
@@ -274,6 +276,8 @@ void DemoScene::tick(Application& app, const FrameContext& frame) {
 
   this->_pGlobalUniforms->updateUniforms(globalUniforms, frame);
 
+  this->_pSimulation->setCameraTransform(
+      this->_pCameraController->getCamera().getTransform());
   this->_pSimulation->tick(app, frame.deltaTime);
 }
 
@@ -290,6 +294,8 @@ void DemoScene::draw(
     Application& app,
     VkCommandBuffer commandBuffer,
     const FrameContext& frame) {
+
+  this->_pSimulation->preDraw(app, commandBuffer);
 
   VkDescriptorSet globalDescriptorSet =
       this->_pGlobalResources->getCurrentDescriptorSet(frame);
