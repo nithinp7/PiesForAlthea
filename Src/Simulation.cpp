@@ -54,7 +54,7 @@ void Simulation::buildPipelineTriangles(GraphicsPipelineBuilder& builder) {
 Simulation::Simulation() {
   SolverOptions solverOptions{};
   this->_solver = Solver(solverOptions);
-  this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 0.85f);
+  this->_solver.createPlane(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 0.85f);
 }
 
 void Simulation::initInputBindings(InputManager& inputManager) {
