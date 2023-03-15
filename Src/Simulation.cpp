@@ -54,7 +54,8 @@ void Simulation::buildPipelineTriangles(GraphicsPipelineBuilder& builder) {
 Simulation::Simulation() {
   SolverOptions solverOptions{};
   this->_solver = Solver(solverOptions);
-  this->_solver.createPlane(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 0.85f);
+  this->_solver.createFloor(glm::vec3(0.f,0.f,0.f), 1.0f, 1.0f);
+  this->_solver.createSheet(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 0.85f);
 }
 
 void Simulation::initInputBindings(InputManager& inputManager) {
@@ -62,7 +63,7 @@ void Simulation::initInputBindings(InputManager& inputManager) {
     // this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 0.85f);
     glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
-    this->_solver.createBox(cameraPos + 10.0f * cameraForward, 0.5f, 0.85f);
+    this->_solver.createSheet(cameraPos + 10.0f * cameraForward, 0.5f, 0.85f);
   });
 }
 
