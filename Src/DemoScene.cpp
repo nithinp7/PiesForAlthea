@@ -327,9 +327,9 @@ void DemoScene::draw(
   //this->_pSimulation->drawLines(pass.getDrawContext());
 
   pass.nextSubpass();
-  // this->_pSimulation->drawTriangles(pass.getDrawContext());
+  this->_pSimulation->drawTriangles(pass.getDrawContext());
 
   pass.nextSubpass();
-  this->_pSimulation->drawNodes(pass.getDrawContext());
+  //this->_pSimulation->drawNodes(pass.getDrawContext());
 }
 } // namespace PiesForAlthea

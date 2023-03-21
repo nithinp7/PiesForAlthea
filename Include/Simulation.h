@@ -56,7 +56,14 @@ private:
     Sphere() = default;
     Sphere(Application& app, VkCommandBuffer commandBuffer);
   };
+  Sphere _sphere{};
 
-  Sphere _sphere;
+  struct StaticGeometry {
+    VertexBuffer<Solver::Vertex> vertexBuffer;
+
+    StaticGeometry() = default;
+    StaticGeometry(Application& app, VkCommandBuffer commandBuffer);
+  };
+  StaticGeometry _staticGeometry{};
 };
 } // namespace PiesForAlthea

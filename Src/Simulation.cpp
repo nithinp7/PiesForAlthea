@@ -51,6 +51,9 @@ void Simulation::buildPipelineTriangles(GraphicsPipelineBuilder& builder) {
       .addVertexAttribute(
           VertexAttributeType::FLOAT,
           offsetof(Solver::Vertex, metallic))
+
+      // TODO: This is a hack to workaround incorrect winding of sphere
+      // triangle indices - fix that instead of disabling backface culling
       .setCullMode(VK_CULL_MODE_NONE)
 
       .addVertexShader(GProjectDirectory + "/Shaders/Triangles.vert")
@@ -97,6 +100,8 @@ void Simulation::buildPipelineNodes(GraphicsPipelineBuilder& builder) {
 
 Simulation::Simulation() {
   SolverOptions solverOptions{};
+  solverOptions.floorHeight = -8.0f;
+
   this->_solver = Solver(solverOptions);
   this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 1.0f);
 }
@@ -105,7 +110,11 @@ void Simulation::initInputBindings(InputManager& inputManager) {
   inputManager.addKeyBinding({GLFW_KEY_B, GLFW_PRESS, 0}, [this]() {
     glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
-    this->_solver.createTetBox(cameraPos + 10.0f * cameraForward, 0.5f, 0.85f);
+    this->_solver.createTetBox(
+        cameraPos + 10.0f * cameraForward,
+        0.5f,
+        10.0f * cameraForward,
+        0.85f);
   });
 }
 
@@ -153,6 +162,10 @@ void Simulation::drawTriangles(const DrawContext& context) const {
       0,
       0,
       0);
+
+  context.bindDescriptorSets();
+  context.bindVertexBuffer(this->_staticGeometry.vertexBuffer);
+  context.draw(this->_staticGeometry.vertexBuffer.getVertexCount());
 }
 
 void Simulation::drawNodes(const DrawContext& context) const {
@@ -205,6 +218,7 @@ void Simulation::_createRenderState(
     Application& app,
     VkCommandBuffer commandBuffer) {
   this->_sphere = Sphere(app, commandBuffer);
+  this->_staticGeometry = StaticGeometry(app, commandBuffer);
 
   std::vector<uint32_t> lineIndices = this->_solver.getLines();
   this->_linesIndexBuffer =
@@ -232,25 +246,24 @@ void Simulation::_deferredDestroyRenderState(Application& app) {
       new DynamicVertexBuffer<Solver::Vertex>(std::move(this->_vertexBuffer));
   this->_vertexBuffer = {};
 
-  VertexBuffer<glm::vec3>* pOldSpheresVertexBuffer =
-      new VertexBuffer<glm::vec3>(std::move(this->_sphere.vertexBuffer));
-  IndexBuffer* pOldSpheresIndexBuffer =
-      new IndexBuffer(std::move(this->_sphere.indexBuffer));
+  Sphere* pOldSphere = new Sphere(std::move(this->_sphere));
   this->_sphere = {};
 
-  // TODO: Delete sphere instance buffer
+  StaticGeometry* pOldStaticGeom =
+      new StaticGeometry(std::move(this->_staticGeometry));
+  this->_staticGeometry = {};
 
   app.addDeletiontask(
       {[pOldLinesIndexBuffer,
         pOldTriIndexBuffer,
         pOldVertexBuffer,
-        pOldSpheresVertexBuffer,
-        pOldSpheresIndexBuffer]() {
+        pOldSphere,
+        pOldStaticGeom]() {
          delete pOldLinesIndexBuffer;
          delete pOldTriIndexBuffer;
          delete pOldVertexBuffer;
-         delete pOldSpheresVertexBuffer;
-         delete pOldSpheresIndexBuffer;
+         delete pOldSphere;
+         delete pOldStaticGeom;
        },
        app.getCurrentFrameRingBufferIndex()});
 }
@@ -313,5 +326,32 @@ Simulation::Sphere::Sphere(Application& app, VkCommandBuffer commandBuffer) {
   this->indexBuffer = IndexBuffer(app, commandBuffer, std::move(indices));
   this->vertexBuffer =
       VertexBuffer<glm::vec3>(app, commandBuffer, std::move(vertices));
+}
+
+Simulation::StaticGeometry::StaticGeometry(
+    Application& app,
+    VkCommandBuffer commandBuffer) {
+  std::vector<Solver::Vertex> vertices;
+  vertices.resize(6);
+
+  float height = -8.0f;
+  float halfWidth = 200.0f;
+
+  vertices[0].position = glm::vec3(-halfWidth, height, -halfWidth);
+  vertices[1].position = glm::vec3(halfWidth, height, -halfWidth);
+  vertices[2].position = glm::vec3(halfWidth, height, halfWidth);
+
+  vertices[3].position = glm::vec3(-halfWidth, height, -halfWidth);
+  vertices[4].position = glm::vec3(halfWidth, height, halfWidth);
+  vertices[5].position = glm::vec3(-halfWidth, height, halfWidth);
+
+  for (uint32_t i = 0; i < vertices.size(); ++i) {
+    vertices[i].baseColor = glm::vec3(1.0f, 0.0f, 0.0f);
+    vertices[i].metallic = 0.0f;
+    vertices[i].roughness = 0.25f;
+  }
+
+  this->vertexBuffer =
+      VertexBuffer<Solver::Vertex>(app, commandBuffer, std::move(vertices));
 }
 } // namespace PiesForAlthea
