@@ -1,12 +1,15 @@
 
 #version 450
 
-layout(location=0) in vec3 pos;
+// Per-instance attributes
+layout(location=0) in vec3 instancePos;
 layout(location=1) in float radius;
 layout(location=2) in vec3 color;
 layout(location=3) in float roughness;
 layout(location=4) in float metallic;
 
+// Per-vertex attributes
+layout(location=5) in vec3 vertPos;
 
 layout(set=0, binding=4) uniform UniformBufferObject {
   mat4 projection;
@@ -26,11 +29,12 @@ layout(location=4) out float metallicOut;
 
 void main() {
   vec3 cameraPos = globals.inverseView[3].xyz;
-  direction = pos - cameraPos;
+  worldPos = instancePos + radius * vertPos; 
+
+  direction = worldPos - cameraPos;
   colorOut = color;
   roughnessOut = roughness;
   metallicOut = metallic;
-
-  worldPos = pos;
-  gl_Position = globals.projection * globals.view * vec4(pos, 1.0);;
+  
+  gl_Position = globals.projection * globals.view * vec4(worldPos, 1.0);;
 }
