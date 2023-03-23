@@ -202,6 +202,17 @@ void DemoScene::createRenderState(Application& app) {
         this->_pGlobalResources->getLayout());
   }
 
+  // SIMULATION SUB PASS (NODES)
+  {
+    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+    subpassBuilder.colorAttachments.push_back(0);
+    subpassBuilder.depthAttachment = 1;
+
+    Simulation::buildPipelineNodes(subpassBuilder.pipelineBuilder);
+    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
+        this->_pGlobalResources->getLayout());
+  }
+
   this->_pRenderPass = std::make_unique<RenderPass>(
       app,
       std::move(attachments),
@@ -313,9 +324,12 @@ void DemoScene::draw(
   }
 
   pass.nextSubpass();
-  this->_pSimulation->drawLines(pass.getDrawContext());
+  //this->_pSimulation->drawLines(pass.getDrawContext());
 
   pass.nextSubpass();
   this->_pSimulation->drawTriangles(pass.getDrawContext());
+
+  pass.nextSubpass();
+  //this->_pSimulation->drawNodes(pass.getDrawContext());
 }
 } // namespace PiesForAlthea

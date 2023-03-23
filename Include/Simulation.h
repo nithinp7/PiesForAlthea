@@ -11,6 +11,7 @@
 #include <vulkan/vulkan.h>
 
 #include <vector>
+#include <cstdint>
 
 using namespace Pies;
 using namespace AltheaEngine;
@@ -20,6 +21,7 @@ class Simulation {
 public:
   static void buildPipelineLines(GraphicsPipelineBuilder& builder);
   static void buildPipelineTriangles(GraphicsPipelineBuilder& builder);
+  static void buildPipelineNodes(GraphicsPipelineBuilder& builder);
 
   Simulation();
 
@@ -28,6 +30,7 @@ public:
   void preDraw(Application& app, VkCommandBuffer commandBuffer);
   void drawLines(const DrawContext& context) const;
   void drawTriangles(const DrawContext& context) const;
+  void drawNodes(const DrawContext& context) const;
 
   void createRenderState(Application& app);
   void destroyRenderState(Application& app);
@@ -44,5 +47,23 @@ private:
   DynamicVertexBuffer<Solver::Vertex> _vertexBuffer;
   IndexBuffer _linesIndexBuffer;
   IndexBuffer _trianglesIndexBuffer;
+  
+  // For visualizing nodes with instancing
+  struct Sphere {
+    VertexBuffer<glm::vec3> vertexBuffer;
+    IndexBuffer indexBuffer;
+
+    Sphere() = default;
+    Sphere(Application& app, VkCommandBuffer commandBuffer);
+  };
+  Sphere _sphere{};
+
+  struct StaticGeometry {
+    VertexBuffer<Solver::Vertex> vertexBuffer;
+
+    StaticGeometry() = default;
+    StaticGeometry(Application& app, VkCommandBuffer commandBuffer);
+  };
+  StaticGeometry _staticGeometry{};
 };
 } // namespace PiesForAlthea
