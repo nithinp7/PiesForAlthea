@@ -106,7 +106,11 @@ Simulation::Simulation() {
   this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 1.0f);
 }
 
-void Simulation::initInputBindings(InputManager& inputManager) {
+void Simulation::initInputBindings(InputManager& inputManager) {  
+  inputManager.addKeyBinding({GLFW_KEY_C, GLFW_PRESS, 0}, [this]() {
+    this->_solver.clear();
+  });
+
   inputManager.addKeyBinding({GLFW_KEY_B, GLFW_PRESS, 0}, [this]() {
     glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
@@ -144,6 +148,10 @@ void Simulation::preDraw(Application& app, VkCommandBuffer commandBuffer) {
 }
 
 void Simulation::drawLines(const DrawContext& context) const {
+  if (this->_linesIndexBuffer.getIndexCount() == 0) {
+    return;
+  }
+  
   context.bindDescriptorSets();
   context.bindIndexBuffer(this->_linesIndexBuffer);
   this->_vertexBuffer.bind(
@@ -159,18 +167,20 @@ void Simulation::drawLines(const DrawContext& context) const {
 }
 
 void Simulation::drawTriangles(const DrawContext& context) const {
-  context.bindDescriptorSets();
-  context.bindIndexBuffer(this->_trianglesIndexBuffer);
-  this->_vertexBuffer.bind(
-      context.getFrame().frameRingBufferIndex,
-      context.getCommandBuffer());
-  vkCmdDrawIndexed(
-      context.getCommandBuffer(),
-      static_cast<uint32_t>(this->_trianglesIndexBuffer.getIndexCount()),
-      1,
-      0,
-      0,
-      0);
+  if (this->_trianglesIndexBuffer.getIndexCount() > 0) {
+    context.bindDescriptorSets();
+    context.bindIndexBuffer(this->_trianglesIndexBuffer);
+    this->_vertexBuffer.bind(
+        context.getFrame().frameRingBufferIndex,
+        context.getCommandBuffer());
+    vkCmdDrawIndexed(
+        context.getCommandBuffer(),
+        static_cast<uint32_t>(this->_trianglesIndexBuffer.getIndexCount()),
+        1,
+        0,
+        0,
+        0);
+  }
 
   context.bindDescriptorSets();
   context.bindVertexBuffer(this->_staticGeometry.vertexBuffer);
@@ -178,6 +188,10 @@ void Simulation::drawTriangles(const DrawContext& context) const {
 }
 
 void Simulation::drawNodes(const DrawContext& context) const {
+  if (this->_vertexBuffer.getVertexCount() == 0) {
+    return;
+  }
+
   context.bindDescriptorSets();
   context.bindIndexBuffer(this->_sphere.indexBuffer);
 
@@ -228,19 +242,25 @@ void Simulation::_createRenderState(
     VkCommandBuffer commandBuffer) {
   this->_sphere = Sphere(app, commandBuffer);
   this->_staticGeometry = StaticGeometry(app, commandBuffer);
-
+  
   std::vector<uint32_t> lineIndices = this->_solver.getLines();
-  this->_linesIndexBuffer =
-      IndexBuffer(app, commandBuffer, std::move(lineIndices));
+  if (!lineIndices.empty()) {
+    this->_linesIndexBuffer =
+        IndexBuffer(app, commandBuffer, std::move(lineIndices));
+  }
 
   std::vector<uint32_t> triIndices = this->_solver.getTriangles();
-  this->_trianglesIndexBuffer =
-      IndexBuffer(app, commandBuffer, std::move(triIndices));
+  if (!triIndices.empty()) {
+    this->_trianglesIndexBuffer =
+        IndexBuffer(app, commandBuffer, std::move(triIndices));
+  }
 
-  this->_vertexBuffer = DynamicVertexBuffer<Solver::Vertex>(
-      app,
-      commandBuffer,
-      this->_solver.getVertices().size());
+  if (!this->_solver.getVertices().empty()) {
+    this->_vertexBuffer = DynamicVertexBuffer<Solver::Vertex>(
+        app,
+        commandBuffer,
+        this->_solver.getVertices().size());
+  }
 }
 
 void Simulation::_deferredDestroyRenderState(Application& app) {
