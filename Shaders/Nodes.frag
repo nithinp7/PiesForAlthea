@@ -25,7 +25,7 @@ layout(set=0, binding=4) uniform UniformBufferObject {
   float exposure;
 } globals;
 
-#include <PBR/PBRMaterial.frag>
+#include <PBR/PBRMaterial.glsl>
 
 void main() {
   vec3 dFdxPos = dFdx(worldPos);

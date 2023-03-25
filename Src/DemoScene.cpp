@@ -110,15 +110,15 @@ void DemoScene::createRenderState(Application& app) {
   depthClear.depthStencil = {1.0f, 0};
 
   std::vector<Attachment> attachments = {
-      {AttachmentType::Color,
+      {ATTACHMENT_FLAG_COLOR,
        app.getSwapChainImageFormat(),
        colorClear,
-       std::nullopt,
+       true,
        false},
-      {AttachmentType::Depth,
+      {ATTACHMENT_FLAG_DEPTH,
        app.getDepthImageFormat(),
        depthClear,
-       app.getDepthImageView(),
+       false,
        true}};
 
   // Global resources
@@ -141,7 +141,7 @@ void DemoScene::createRenderState(Application& app) {
   {
     SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
     subpassBuilder.colorAttachments.push_back(0);
-    Skybox::buildPipeline(app, subpassBuilder.pipelineBuilder);
+    Skybox::buildPipeline(subpassBuilder.pipelineBuilder);
 
     subpassBuilder.pipelineBuilder
         .layoutBuilder
@@ -215,8 +215,14 @@ void DemoScene::createRenderState(Application& app) {
 
   this->_pRenderPass = std::make_unique<RenderPass>(
       app,
+      app.getSwapChainExtent(),
       std::move(attachments),
       std::move(subpassBuilders));
+
+  std::vector<VkImageView> scratchViews;
+  scratchViews.push_back(app.getDepthImageView());
+  this->_swapChainFrameBuffers =
+      SwapChainFrameBufferCollection(app, *this->_pRenderPass, scratchViews);
 
   // this->_models.emplace_back(
   //     app,
@@ -268,6 +274,7 @@ void DemoScene::destroyRenderState(Application& app) {
   this->_pGltfMaterialAllocator.reset();
   this->_iblResources = {};
   this->_pSimulation->destroyRenderState(app);
+  this->_swapChainFrameBuffers = {};
 }
 
 void DemoScene::tick(Application& app, const FrameContext& frame) {
@@ -311,7 +318,11 @@ void DemoScene::draw(
   VkDescriptorSet globalDescriptorSet =
       this->_pGlobalResources->getCurrentDescriptorSet(frame);
 
-  ActiveRenderPass pass = this->_pRenderPass->begin(app, commandBuffer, frame);
+  ActiveRenderPass pass = this->_pRenderPass->begin(
+      app,
+      commandBuffer,
+      frame,
+      this->_swapChainFrameBuffers.getCurrentFrameBuffer(frame));
   pass
       // Bind global descriptor sets
       .setGlobalDescriptorSets(gsl::span(&globalDescriptorSet, 1))
@@ -324,12 +335,12 @@ void DemoScene::draw(
   }
 
   pass.nextSubpass();
-  //this->_pSimulation->drawLines(pass.getDrawContext());
+  // this->_pSimulation->drawLines(pass.getDrawContext());
 
   pass.nextSubpass();
   this->_pSimulation->drawTriangles(pass.getDrawContext());
 
   pass.nextSubpass();
-  //this->_pSimulation->drawNodes(pass.getDrawContext());
+  // this->_pSimulation->drawNodes(pass.getDrawContext());
 }
 } // namespace PiesForAlthea
