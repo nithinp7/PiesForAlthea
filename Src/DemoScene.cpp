@@ -56,7 +56,18 @@ void DemoScene::initGame(Application& app) {
   input.addKeyBinding(
       {GLFW_KEY_R, GLFW_PRESS, GLFW_MOD_CONTROL},
       [&app, that = this]() {
-        for (Subpass& subpass : that->_pRenderPass->getSubpasses()) {
+        for (Subpass& subpass : that->_pForwardPass->getSubpasses()) {
+          GraphicsPipeline& pipeline = subpass.getPipeline();
+          if (pipeline.recompileStaleShaders()) {
+            if (pipeline.hasShaderRecompileErrors()) {
+              std::cout << pipeline.getShaderRecompileErrors() << "\n";
+            } else {
+              pipeline.recreatePipeline(app);
+            }
+          }
+        }
+
+        for (Subpass& subpass : that->_pDeferredPass->getSubpasses()) {
           GraphicsPipeline& pipeline = subpass.getPipeline();
           if (pipeline.recompileStaleShaders()) {
             if (pipeline.hasShaderRecompileErrors()) {
@@ -94,135 +105,60 @@ void DemoScene::createRenderState(Application& app) {
   this->_pCameraController->getCamera().setAspectRatio(
       (float)extent.width / (float)extent.height);
 
-  this->_pSimulation->createRenderState(app);
-
   SingleTimeCommandBuffer commandBuffer(app);
+  this->_createGlobalResources(app, commandBuffer);
+  this->_createModels(app, commandBuffer);
+  this->_createForwardPass(app);
+  this->_createDeferredPass(app);
+}
 
-  this->_iblResources = ImageBasedLighting::createResources(
-      app,
-      commandBuffer,
-      "NeoclassicalInterior");
+void DemoScene::destroyRenderState(Application& app) {
+  this->_models.clear();
 
-  // TODO: Default color and depth-stencil clear values for attachments?
-  VkClearValue colorClear;
-  colorClear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-  VkClearValue depthClear;
-  depthClear.depthStencil = {1.0f, 0};
+  this->_pForwardPass.reset();
+  this->_gBufferResources = {};
+  this->_forwardFrameBuffer = {};
 
-  std::vector<Attachment> attachments = {
-      {ATTACHMENT_FLAG_COLOR,
-       app.getSwapChainImageFormat(),
-       colorClear,
-       true,
-       false},
-      {ATTACHMENT_FLAG_DEPTH,
-       app.getDepthImageFormat(),
-       depthClear,
-       false,
-       true}};
+  this->_pDeferredPass.reset();
+  this->_swapChainFrameBuffers = {};
+  this->_pDeferredMaterial.reset();
+  this->_pDeferredMaterialAllocator.reset();
 
-  // Global resources
-  DescriptorSetLayoutBuilder globalResourceLayout;
+  this->_pGlobalResources.reset();
+  this->_pGlobalUniforms.reset();
+  this->_pGltfMaterialAllocator.reset();
+  this->_iblResources = {};
 
-  // Add textures for IBL
-  ImageBasedLighting::buildLayout(globalResourceLayout);
-  globalResourceLayout
-      // Global uniforms.
-      .addUniformBufferBinding();
+  this->_pSSR.reset();
 
-  this->_pGlobalResources =
-      std::make_shared<PerFrameResources>(app, globalResourceLayout);
-  this->_pGlobalUniforms =
-      std::make_unique<TransientUniforms<GlobalUniforms>>(app, commandBuffer);
+  this->_pSimulation->destroyRenderState(app);
+}
 
-  std::vector<SubpassBuilder> subpassBuilders;
+void DemoScene::tick(Application& app, const FrameContext& frame) {
+  this->_pCameraController->tick(frame.deltaTime);
+  const Camera& camera = this->_pCameraController->getCamera();
 
-  // SKYBOX PASS
-  {
-    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
-    subpassBuilder.colorAttachments.push_back(0);
-    Skybox::buildPipeline(subpassBuilder.pipelineBuilder);
+  const glm::mat4& projection = camera.getProjection();
 
-    subpassBuilder.pipelineBuilder
-        .layoutBuilder
-        // Global resources (view, projection, skybox)
-        .addDescriptorSet(this->_pGlobalResources->getLayout());
-  }
+  GlobalUniforms globalUniforms;
+  globalUniforms.projection = camera.getProjection();
+  globalUniforms.inverseProjection = glm::inverse(globalUniforms.projection);
+  globalUniforms.view = camera.computeView();
+  globalUniforms.inverseView = glm::inverse(globalUniforms.view);
+  globalUniforms.lightDir = this->_lightDir;
+  globalUniforms.time = static_cast<float>(frame.currentTime);
+  globalUniforms.exposure = 0.3f;
 
-  // REGULAR PASS
-  {
-    // Per-primitive material resources
-    DescriptorSetLayoutBuilder primitiveMaterialLayout;
-    Primitive::buildMaterial(primitiveMaterialLayout);
+  this->_pGlobalUniforms->updateUniforms(globalUniforms, frame);
 
-    this->_pGltfMaterialAllocator =
-        std::make_unique<DescriptorSetAllocator>(app, primitiveMaterialLayout);
+  this->_pSimulation->setCameraTransform(
+      this->_pCameraController->getCamera().getTransform());
+  this->_pSimulation->tick(app, frame.deltaTime);
+}
 
-    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
-    subpassBuilder.colorAttachments.push_back(0);
-    subpassBuilder.depthAttachment = 1;
-
-    Primitive::buildPipeline(subpassBuilder.pipelineBuilder);
-
-    subpassBuilder
-        .pipelineBuilder
-        // Vertex shader
-        .addVertexShader(GEngineDirectory + "/Shaders/GltfPBR.vert")
-        // Fragment shader
-        .addFragmentShader(GEngineDirectory + "/Shaders/GltfPBR.frag")
-
-        // Pipeline resource layouts
-        .layoutBuilder
-        // Global resources (view, projection, environment map)
-        .addDescriptorSet(this->_pGlobalResources->getLayout())
-        // Material (per-object) resources (diffuse, normal map,
-        // metallic-roughness, etc)
-        .addDescriptorSet(this->_pGltfMaterialAllocator->getLayout());
-  }
-
-  // SIMULATION SUB PASS (LINES)
-  {
-    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
-    subpassBuilder.colorAttachments.push_back(0);
-    subpassBuilder.depthAttachment = 1;
-
-    Simulation::buildPipelineLines(subpassBuilder.pipelineBuilder);
-    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
-        this->_pGlobalResources->getLayout());
-  }
-
-  // SIMULATION SUB PASS (TRIANGLES)
-  {
-    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
-    subpassBuilder.colorAttachments.push_back(0);
-    subpassBuilder.depthAttachment = 1;
-
-    Simulation::buildPipelineTriangles(subpassBuilder.pipelineBuilder);
-    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
-        this->_pGlobalResources->getLayout());
-  }
-
-  // SIMULATION SUB PASS (NODES)
-  {
-    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
-    subpassBuilder.colorAttachments.push_back(0);
-    subpassBuilder.depthAttachment = 1;
-
-    Simulation::buildPipelineNodes(subpassBuilder.pipelineBuilder);
-    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
-        this->_pGlobalResources->getLayout());
-  }
-
-  this->_pRenderPass = std::make_unique<RenderPass>(
-      app,
-      app.getSwapChainExtent(),
-      std::move(attachments),
-      std::move(subpassBuilders));
-
-  std::vector<VkImageView> scratchViews;
-  scratchViews.push_back(app.getDepthImageView());
-  this->_swapChainFrameBuffers =
-      SwapChainFrameBufferCollection(app, *this->_pRenderPass, scratchViews);
+void DemoScene::_createModels(
+    Application& app,
+    SingleTimeCommandBuffer& commandBuffer) {
 
   // this->_models.emplace_back(
   //     app,
@@ -254,8 +190,41 @@ void DemoScene::createRenderState(Application& app) {
   //     commandBuffer,
   //     GEngineDirectory + "/Content/Models/Sponza/glTF/Sponza.gltf",
   //     *this->_pGltfMaterialAllocator);
+}
 
+void DemoScene::_createGlobalResources(
+    Application& app,
+    SingleTimeCommandBuffer& commandBuffer) {
+  this->_iblResources = ImageBasedLighting::createResources(
+      app,
+      commandBuffer,
+      "NeoclassicalInterior");
+  this->_gBufferResources = GBufferResources(app);
+
+  // Per-primitive material resources
   {
+    DescriptorSetLayoutBuilder primitiveMaterialLayout;
+    Primitive::buildMaterial(primitiveMaterialLayout);
+
+    this->_pGltfMaterialAllocator =
+        std::make_unique<DescriptorSetAllocator>(app, primitiveMaterialLayout);
+  }
+
+  // Global resources
+  {
+    DescriptorSetLayoutBuilder globalResourceLayout;
+
+    // Add textures for IBL
+    ImageBasedLighting::buildLayout(globalResourceLayout);
+    globalResourceLayout
+        // Global uniforms.
+        .addUniformBufferBinding();
+
+    this->_pGlobalResources =
+        std::make_unique<PerFrameResources>(app, globalResourceLayout);
+    this->_pGlobalUniforms =
+        std::make_unique<TransientUniforms<GlobalUniforms>>(app, commandBuffer);
+
     ResourcesAssignment assignment = this->_pGlobalResources->assign();
 
     // Bind IBL resources
@@ -264,49 +233,163 @@ void DemoScene::createRenderState(Application& app) {
     // Bind global uniforms
     assignment.bindTransientUniforms(*this->_pGlobalUniforms);
   }
-}
 
-void DemoScene::destroyRenderState(Application& app) {
-  this->_models.clear();
-  this->_pRenderPass.reset();
-  this->_pGlobalResources.reset();
-  this->_pGlobalUniforms.reset();
-  this->_pGltfMaterialAllocator.reset();
-  this->_iblResources = {};
-  this->_pSimulation->destroyRenderState(app);
-  this->_swapChainFrameBuffers = {};
-}
+  // Set up SSR resources
+  this->_pSSR = std::make_unique<ScreenSpaceReflection>(
+      app,
+      commandBuffer,
+      this->_pGlobalResources->getLayout(),
+      this->_gBufferResources);
 
-void DemoScene::tick(Application& app, const FrameContext& frame) {
-  this->_pCameraController->tick(frame.deltaTime);
-  const Camera& camera = this->_pCameraController->getCamera();
+  // Deferred pass resources (GBuffer)
+  {
+    DescriptorSetLayoutBuilder deferredMaterialLayout{};
+    this->_gBufferResources.buildMaterial(deferredMaterialLayout);
+    // Roughness-filtered reflection buffer
+    deferredMaterialLayout.addTextureBinding();
 
-  const glm::mat4& projection = camera.getProjection();
+    this->_pDeferredMaterialAllocator =
+        std::make_unique<DescriptorSetAllocator>(
+            app,
+            deferredMaterialLayout,
+            1);
+    this->_pDeferredMaterial =
+        std::make_unique<Material>(app, *this->_pDeferredMaterialAllocator);
 
-  GlobalUniforms globalUniforms;
-  globalUniforms.projection = camera.getProjection();
-  globalUniforms.inverseProjection = glm::inverse(globalUniforms.projection);
-  globalUniforms.view = camera.computeView();
-  globalUniforms.inverseView = glm::inverse(globalUniforms.view);
-  globalUniforms.lightDir = this->_lightDir;
-  globalUniforms.time = static_cast<float>(frame.currentTime);
-  globalUniforms.exposure = 0.3f;
-
-  this->_pGlobalUniforms->updateUniforms(globalUniforms, frame);
-
-  this->_pSimulation->setCameraTransform(
-      this->_pCameraController->getCamera().getTransform());
-  this->_pSimulation->tick(app, frame.deltaTime);
-}
-
-namespace {
-struct DrawableEnvMap {
-  void draw(const DrawContext& context) const {
-    context.bindDescriptorSets();
-    context.draw(3);
+    // Bind G-Buffer resources as textures in the deferred pass
+    ResourcesAssignment& assignment = this->_pDeferredMaterial->assign();
+    this->_gBufferResources.bindTextures(assignment);
+    this->_pSSR->bindTexture(assignment);
   }
-};
-} // namespace
+}
+
+void DemoScene::_createForwardPass(Application& app) {
+  std::vector<SubpassBuilder> subpassBuilders;
+
+  //  FORWARD GLTF PASS
+  {
+    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+    // The GBuffer contains the following color attachments
+    // 1. Position
+    // 2. Normal
+    // 3. Albedo
+    // 4. Metallic-Roughness-Occlusion
+    subpassBuilder.colorAttachments = {0, 1, 2, 3};
+    subpassBuilder.depthAttachment = 4;
+
+    Primitive::buildPipeline(subpassBuilder.pipelineBuilder);
+
+    subpassBuilder
+        .pipelineBuilder
+        // Vertex shader
+        .addVertexShader(GEngineDirectory + "/Shaders/GltfForward.vert")
+        // Fragment shader
+        .addFragmentShader(GEngineDirectory + "/Shaders/GltfForward.frag")
+
+        // Pipeline resource layouts
+        .layoutBuilder
+        // Global resources (view, projection, environment map)
+        .addDescriptorSet(this->_pGlobalResources->getLayout())
+        // Material (per-object) resources (diffuse, normal map,
+        // metallic-roughness, etc)
+        .addDescriptorSet(this->_pGltfMaterialAllocator->getLayout());
+  }
+
+  // SIMULATION SUB PASS (LINES)
+  // {
+  //   SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+  //   subpassBuilder.colorAttachments = {0, 1, 2, 3};
+  //   subpassBuilder.depthAttachment = 4;
+
+  //   Simulation::buildPipelineLines(subpassBuilder.pipelineBuilder);
+  //   subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
+  //       this->_pGlobalResources->getLayout());
+  // }
+
+  // SIMULATION SUB PASS (TRIANGLES)
+  {
+    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+    subpassBuilder.colorAttachments = {0, 1, 2, 3};
+    subpassBuilder.depthAttachment = 4;
+
+    Simulation::buildPipelineTriangles(subpassBuilder.pipelineBuilder);
+    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
+        this->_pGlobalResources->getLayout());
+  }
+
+  // SIMULATION SUB PASS (NODES)
+  {
+    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+    subpassBuilder.colorAttachments = {0, 1, 2, 3};
+    subpassBuilder.depthAttachment = 4;
+
+    Simulation::buildPipelineNodes(subpassBuilder.pipelineBuilder);
+    subpassBuilder.pipelineBuilder.layoutBuilder.addDescriptorSet(
+        this->_pGlobalResources->getLayout());
+  }
+
+  std::vector<Attachment> attachments =
+      this->_gBufferResources.getAttachmentDescriptions();
+  const VkExtent2D& extent = app.getSwapChainExtent();
+  this->_pForwardPass = std::make_unique<RenderPass>(
+      app,
+      extent,
+      std::move(attachments),
+      std::move(subpassBuilders));
+
+  this->_forwardFrameBuffer = FrameBuffer(
+      app,
+      *this->_pForwardPass,
+      extent,
+      this->_gBufferResources.getAttachmentViews());
+}
+
+void DemoScene::_createDeferredPass(Application& app) {
+  VkClearValue colorClear;
+  colorClear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+  VkClearValue depthClear;
+  depthClear.depthStencil = {1.0f, 0};
+
+  std::vector<Attachment> attachments = {
+      {ATTACHMENT_FLAG_COLOR,
+       app.getSwapChainImageFormat(),
+       colorClear,
+       true,
+       false}};
+
+  std::vector<SubpassBuilder> subpassBuilders;
+
+  // DEFERRED PBR PASS
+  {
+    SubpassBuilder& subpassBuilder = subpassBuilders.emplace_back();
+    subpassBuilder.colorAttachments.push_back(0);
+
+    subpassBuilder.pipelineBuilder.setCullMode(VK_CULL_MODE_FRONT_BIT)
+        .setDepthTesting(false)
+
+        // Vertex shader
+        .addVertexShader(GProjectDirectory + "/Shaders/DeferredPass.vert")
+        // Fragment shader
+        .addFragmentShader(GProjectDirectory + "/Shaders/DeferredPass.frag")
+
+        // Pipeline resource layouts
+        .layoutBuilder
+        // Global resources (view, projection, environment map)
+        .addDescriptorSet(this->_pGlobalResources->getLayout())
+        // GBuffer material (position, normal, albedo,
+        // metallic-roughness-occlusion)
+        .addDescriptorSet(this->_pDeferredMaterialAllocator->getLayout());
+  }
+
+  this->_pDeferredPass = std::make_unique<RenderPass>(
+      app,
+      app.getSwapChainExtent(),
+      std::move(attachments),
+      std::move(subpassBuilders));
+
+  this->_swapChainFrameBuffers =
+      SwapChainFrameBufferCollection(app, *this->_pDeferredPass, {});
+}
 
 void DemoScene::draw(
     Application& app,
@@ -314,33 +397,57 @@ void DemoScene::draw(
     const FrameContext& frame) {
 
   this->_pSimulation->preDraw(app, commandBuffer);
+  this->_gBufferResources.transitionToAttachment(commandBuffer);
 
   VkDescriptorSet globalDescriptorSet =
       this->_pGlobalResources->getCurrentDescriptorSet(frame);
 
-  ActiveRenderPass pass = this->_pRenderPass->begin(
-      app,
-      commandBuffer,
-      frame,
-      this->_swapChainFrameBuffers.getCurrentFrameBuffer(frame));
-  pass
-      // Bind global descriptor sets
-      .setGlobalDescriptorSets(gsl::span(&globalDescriptorSet, 1))
-      // Draw skybox
-      .draw(DrawableEnvMap{})
-      .nextSubpass();
-  // Draw models
-  for (const Model& model : this->_models) {
-    pass.draw(model);
+  // Forward pass
+  {
+    ActiveRenderPass pass = this->_pForwardPass->begin(
+        app,
+        commandBuffer,
+        frame,
+        this->_forwardFrameBuffer);
+    pass.setGlobalDescriptorSets(gsl::span(&globalDescriptorSet, 1));
+    // Draw models
+    for (const Model& model : this->_models) {
+      pass.draw(model);
+    }
+
+    //pass.nextSubpass();
+    // this->_pSimulation->drawLines(pass.getDrawContext());
+
+    pass.nextSubpass();
+    this->_pSimulation->drawTriangles(pass.getDrawContext());
+
+    pass.nextSubpass();
+    this->_pSimulation->drawNodes(pass.getDrawContext());
   }
 
-  pass.nextSubpass();
-  // this->_pSimulation->drawLines(pass.getDrawContext());
 
-  pass.nextSubpass();
-  this->_pSimulation->drawTriangles(pass.getDrawContext());
+  this->_gBufferResources.transitionToTextures(commandBuffer);
 
-  pass.nextSubpass();
-  // this->_pSimulation->drawNodes(pass.getDrawContext());
+  // Reflection buffer and convolution
+  {
+    this->_pSSR
+        ->captureReflection(app, commandBuffer, globalDescriptorSet, frame);
+    this->_pSSR->convolveReflectionBuffer(app, commandBuffer, frame);
+  }
+
+  // Deferred pass
+  {
+    ActiveRenderPass pass = this->_pDeferredPass->begin(
+        app,
+        commandBuffer,
+        frame,
+        this->_swapChainFrameBuffers.getCurrentFrameBuffer(frame));
+    // Bind global descriptor sets
+    pass.setGlobalDescriptorSets(gsl::span(&globalDescriptorSet, 1));
+
+    const DrawContext& context = pass.getDrawContext();
+    context.bindDescriptorSets(*this->_pDeferredMaterial);
+    context.draw(3);
+  }
 }
 } // namespace PiesForAlthea

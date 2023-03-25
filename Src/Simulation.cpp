@@ -167,20 +167,20 @@ void Simulation::drawLines(const DrawContext& context) const {
 }
 
 void Simulation::drawTriangles(const DrawContext& context) const {
-  if (this->_trianglesIndexBuffer.getIndexCount() > 0) {
-    context.bindDescriptorSets();
-    context.bindIndexBuffer(this->_trianglesIndexBuffer);
-    this->_vertexBuffer.bind(
-        context.getFrame().frameRingBufferIndex,
-        context.getCommandBuffer());
-    vkCmdDrawIndexed(
-        context.getCommandBuffer(),
-        static_cast<uint32_t>(this->_trianglesIndexBuffer.getIndexCount()),
-        1,
-        0,
-        0,
-        0);
-  }
+  // if (this->_trianglesIndexBuffer.getIndexCount() > 0) {
+  //   context.bindDescriptorSets();
+  //   context.bindIndexBuffer(this->_trianglesIndexBuffer);
+  //   this->_vertexBuffer.bind(
+  //       context.getFrame().frameRingBufferIndex,
+  //       context.getCommandBuffer());
+  //   vkCmdDrawIndexed(
+  //       context.getCommandBuffer(),
+  //       static_cast<uint32_t>(this->_trianglesIndexBuffer.getIndexCount()),
+  //       1,
+  //       0,
+  //       0,
+  //       0);
+  // }
 
   context.bindDescriptorSets();
   context.bindVertexBuffer(this->_staticGeometry.vertexBuffer);
