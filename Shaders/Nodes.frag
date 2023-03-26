@@ -7,6 +7,7 @@ layout(location=1) in vec3 direction;
 layout(location=2) in vec3 baseColor;
 layout(location=3) in float roughness;
 layout(location=4) in float metallic;
+layout(location=5) in vec3 normal;
 
 layout(location=0) out vec4 GBuffer_Position;
 layout(location=1) out vec4 GBuffer_Normal;
@@ -33,13 +34,10 @@ void main() {
   GBuffer_Albedo = vec4(baseColor, 1.0);
   GBuffer_MetallicRoughnessOcclusion = vec4(metallic, roughness, 1.0, 1.0);
 
-  vec3 dFdxPos = dFdx(worldPos);
-  vec3 dFdyPos = dFdy(worldPos);
-  vec3 normal = normalize(cross(dFdxPos,dFdyPos));
-  
-  if (dot(direction, normal) > 0.0) {
-    normal *= -1.0;
+  vec3 N = normal;
+  if (dot(direction, N) > 0.0) {
+    N *= -1.0;
   }
   
-  GBuffer_Normal = vec4(normal, 1.0);
+  GBuffer_Normal = vec4(N, 1.0);
 }

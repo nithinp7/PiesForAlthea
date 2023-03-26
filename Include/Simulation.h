@@ -41,6 +41,14 @@ private:
   void _createRenderState(Application& app, VkCommandBuffer commandBuffer);
   void _deferredDestroyRenderState(Application& app);
 
+  enum class ViewMode {
+    TRIANGLES,
+    NODES,
+    LINES
+  };
+
+  ViewMode _viewMode = ViewMode::TRIANGLES;
+
   glm::mat4 _cameraTransform;
 
   Solver _solver;

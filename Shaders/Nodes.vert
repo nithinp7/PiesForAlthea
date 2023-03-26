@@ -26,10 +26,13 @@ layout(location=1) out vec3 direction;
 layout(location=2) out vec3 colorOut;
 layout(location=3) out float roughnessOut;
 layout(location=4) out float metallicOut;
+layout(location=5) out vec3 normalOut;
 
 void main() {
   vec3 cameraPos = globals.inverseView[3].xyz;
   worldPos = instancePos + radius * vertPos; 
+
+  normalOut = normalize(vertPos);
 
   direction = worldPos - cameraPos;
   colorOut = color;

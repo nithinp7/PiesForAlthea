@@ -27,16 +27,16 @@ layout(set=1, binding=4) uniform sampler2D reflectionBuffer;
 
 #include <PBR/PBRMaterial.glsl>
 
+vec4 sampleReflection(float roughness) {
+  return textureLod(reflectionBuffer, uv, 4.0 * roughness).rgba;
+} 
+
 vec3 sampleEnvMap(vec3 dir) {
   float yaw = atan(dir.z, dir.x);
   float pitch = -atan(dir.y, length(dir.xz));
   vec2 envMapUV = vec2(0.5 * yaw, pitch) / PI + 0.5;
 
   return textureLod(environmentMap, envMapUV, 0.0).rgb;
-} 
-
-vec4 sampleReflection(float roughness) {
-  return textureLod(reflectionBuffer, uv, 4.0 * roughness).rgba;
 } 
 
 // Random number generator and sample warping
@@ -106,10 +106,10 @@ float computeSSAO(vec2 currentUV, vec3 worldPos, vec3 normal) {
 
       if (currentProjection * prevProjection < 0.0 && worldStep <= 5 * dx && i > 0) {
         vec3 currentNormal = normalize(texture(gBufferNormal, currentUV, 0.0).xyz);
-        if (dot(currentNormal, rayDir) < 0) {
-          ao += 1.0;
+        //if (dot(currentNormal, rayDir) < 0) {
+          ao += 1.0;//2.0;
           break;
-        }
+        //}
       }
 
       prevPos = currentPos;
@@ -137,14 +137,19 @@ void main() {
 
   vec3 normal = normalize(texture(gBufferNormal, uv).xyz);
   vec3 baseColor = texture(gBufferAlbedo, uv).rgb;
-  vec3 metallicRoughnessOcclusion = 
+  vec3 metallicRoughnessOcclusion = //vec3(0.0, 0.2, 0.0);
       texture(gBufferMetallicRoughnessOcclusion, uv).rgb;
 
   vec3 reflectedDirection = reflect(normalize(direction), normal);
-  // vec4 reflectedColor = sampleReflection(metallicRoughnessOcclusion.y);
-  vec4 reflectedColor = vec4(sampleEnvMap(reflectedDirection, metallicRoughnessOcclusion.y), 1.0);
+  vec4 reflectedColor = sampleReflection(metallicRoughnessOcclusion.y);
+  vec4 envReflectedColor = vec4(sampleEnvMap(reflectedDirection, metallicRoughnessOcclusion.y), 1.0);
   // reflectedColor = reflectedColor / reflectedColor.a;
-  // reflectedColor.rgb = mix(baseColor, reflectedColor.rgb, reflectedColor.a);
+  if (reflectedColor.a < 0.01) {
+    reflectedColor.rgb = envReflectedColor.rgb;
+  } else {
+    reflectedColor.rgb = 
+        mix(envReflectedColor.rgb, reflectedColor.rgb / reflectedColor.a, reflectedColor.a);
+  }
 
   vec3 irradianceColor = sampleIrrMap(normal);
 
