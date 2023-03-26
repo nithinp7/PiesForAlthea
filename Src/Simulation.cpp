@@ -101,12 +101,13 @@ void Simulation::buildPipelineNodes(GraphicsPipelineBuilder& builder) {
 Simulation::Simulation() {
   SolverOptions solverOptions{};
   solverOptions.floorHeight = -8.0f;
+  solverOptions.gridSpacing = 1.0f;
 
   this->_solver = Solver(solverOptions);
-  this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 0.5f, 1.0f);
+  this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 1.0f, 1.0f);
 }
 
-void Simulation::initInputBindings(InputManager& inputManager) {  
+void Simulation::initInputBindings(InputManager& inputManager) {
   inputManager.addKeyBinding({GLFW_KEY_C, GLFW_PRESS, 0}, [this]() {
     this->_solver.clear();
   });
@@ -116,7 +117,7 @@ void Simulation::initInputBindings(InputManager& inputManager) {
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
     this->_solver.createTetBox(
         cameraPos + 10.0f * cameraForward,
-        0.5f,
+        1.0f,
         10.0f * cameraForward,
         0.85f);
   });
@@ -124,10 +125,15 @@ void Simulation::initInputBindings(InputManager& inputManager) {
   inputManager.addKeyBinding({GLFW_KEY_N, GLFW_PRESS, 0}, [this]() {
     glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
-    this->_solver.createSheet(
-        cameraPos + 10.0f * cameraForward,
-        0.5f,
-        0.85f);
+    this->_solver.createSheet(cameraPos + 10.0f * cameraForward, 1.0f, 0.85f);
+  });
+
+  inputManager.addKeyBinding({GLFW_KEY_1, GLFW_PRESS, 0}, [this]() {
+    this->_viewMode = ViewMode::TRIANGLES;
+  });
+
+  inputManager.addKeyBinding({GLFW_KEY_2, GLFW_PRESS, 0}, [this]() {
+    this->_viewMode = ViewMode::NODES;
   });
 }
 
@@ -151,7 +157,7 @@ void Simulation::drawLines(const DrawContext& context) const {
   if (this->_linesIndexBuffer.getIndexCount() == 0) {
     return;
   }
-  
+
   context.bindDescriptorSets();
   context.bindIndexBuffer(this->_linesIndexBuffer);
   this->_vertexBuffer.bind(
@@ -167,7 +173,8 @@ void Simulation::drawLines(const DrawContext& context) const {
 }
 
 void Simulation::drawTriangles(const DrawContext& context) const {
-  if (this->_trianglesIndexBuffer.getIndexCount() > 0) {
+  if (this->_viewMode == ViewMode::TRIANGLES &&
+      this->_trianglesIndexBuffer.getIndexCount() > 0) {
     context.bindDescriptorSets();
     context.bindIndexBuffer(this->_trianglesIndexBuffer);
     this->_vertexBuffer.bind(
@@ -188,7 +195,8 @@ void Simulation::drawTriangles(const DrawContext& context) const {
 }
 
 void Simulation::drawNodes(const DrawContext& context) const {
-  if (this->_vertexBuffer.getVertexCount() == 0) {
+  if (this->_viewMode != ViewMode::NODES ||
+      this->_vertexBuffer.getVertexCount() == 0) {
     return;
   }
 
@@ -235,6 +243,10 @@ void Simulation::destroyRenderState(Application& app) {
   this->_linesIndexBuffer = {};
   this->_trianglesIndexBuffer = {};
   this->_sphere = {};
+  this->_staticGeometry = {};
+
+  // Kinda hacky
+  this->_solver.renderStateDirty = true;
 }
 
 void Simulation::_createRenderState(
@@ -242,7 +254,7 @@ void Simulation::_createRenderState(
     VkCommandBuffer commandBuffer) {
   this->_sphere = Sphere(app, commandBuffer);
   this->_staticGeometry = StaticGeometry(app, commandBuffer);
-  
+
   std::vector<uint32_t> lineIndices = this->_solver.getLines();
   if (!lineIndices.empty()) {
     this->_linesIndexBuffer =

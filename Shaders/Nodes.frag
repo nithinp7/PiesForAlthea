@@ -7,8 +7,12 @@ layout(location=1) in vec3 direction;
 layout(location=2) in vec3 baseColor;
 layout(location=3) in float roughness;
 layout(location=4) in float metallic;
+layout(location=5) in vec3 normal;
 
-layout(location=0) out vec4 color;
+layout(location=0) out vec4 GBuffer_Position;
+layout(location=1) out vec4 GBuffer_Normal;
+layout(location=2) out vec4 GBuffer_Albedo;
+layout(location=3) out vec4 GBuffer_MetallicRoughnessOcclusion;
 
 layout(set=0, binding=0) uniform sampler2D environmentMap; 
 layout(set=0, binding=1) uniform sampler2D prefilteredMap; 
@@ -25,31 +29,15 @@ layout(set=0, binding=4) uniform UniformBufferObject {
   float exposure;
 } globals;
 
-#include <PBR/PBRMaterial.frag>
-
 void main() {
-  vec3 dFdxPos = dFdx(worldPos);
-  vec3 dFdyPos = dFdy(worldPos);
-  vec3 normal = normalize(cross(dFdxPos,dFdyPos));
+  GBuffer_Position = vec4(worldPos, 1.0);
+  GBuffer_Albedo = vec4(baseColor, 1.0);
+  GBuffer_MetallicRoughnessOcclusion = vec4(metallic, roughness, 1.0, 1.0);
 
-  float ambientOcclusion = 1.0;
-
-  vec3 reflectedDirection = reflect(normalize(direction), normal);
-  vec3 reflectedColor = sampleEnvMap(reflectedDirection, roughness);
-  vec3 irradianceColor = sampleIrrMap(normal);
-
-  vec3 material = 
-      pbrMaterial(
-        normalize(direction),
-        globals.lightDir, 
-        normal, 
-        baseColor.rgb, 
-        reflectedColor, 
-        irradianceColor,
-        metallic, 
-        roughness, 
-        ambientOcclusion);
-
-  material = vec3(1.0) - exp(-material * globals.exposure);
-  color = vec4(material, 1.0);
+  vec3 N = normal;
+  if (dot(direction, N) > 0.0) {
+    N *= -1.0;
+  }
+  
+  GBuffer_Normal = vec4(N, 1.0);
 }
