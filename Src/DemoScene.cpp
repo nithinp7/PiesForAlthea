@@ -199,6 +199,7 @@ void DemoScene::_createGlobalResources(
   this->_iblResources = ImageBasedLighting::createResources(
       app,
       commandBuffer,
+      // "LuxuryRoom");
       "NeoclassicalInterior");
   this->_gBufferResources = GBufferResources(app);
 
