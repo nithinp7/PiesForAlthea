@@ -47,7 +47,7 @@ private:
     LINES
   };
 
-  ViewMode _viewMode = ViewMode::TRIANGLES;
+  ViewMode _viewMode = ViewMode::NODES;
 
   glm::mat4 _cameraTransform;
 
