@@ -128,6 +128,12 @@ void Simulation::initInputBindings(InputManager& inputManager) {
     this->_solver.createSheet(cameraPos + 10.0f * cameraForward, 1.0f, 0.85f);
   });
 
+  inputManager.addKeyBinding({GLFW_KEY_M, GLFW_PRESS, 0}, [this]() {
+    glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
+    glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
+    this->_solver.createBendSheet(cameraPos + 10.0f * cameraForward, 1.0f, 0.85f);
+  });
+
   inputManager.addKeyBinding({GLFW_KEY_1, GLFW_PRESS, 0}, [this]() {
     this->_viewMode = ViewMode::TRIANGLES;
   });
