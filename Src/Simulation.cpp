@@ -104,13 +104,18 @@ Simulation::Simulation() {
   solverOptions.gridSpacing = 1.0f;
 
   this->_solver = Solver(solverOptions);
-  this->_solver.createTetBox(
+  // this->_solver.createTetBox(
+  //       glm::vec3(-10.0f, 5.0f, 0.0f),
+  //       1.0f,
+  //       glm::vec3(0.0f),
+  //       1000.0,
+  //       1.0f,
+  //       false);
+  this->_solver.createSheet(
         glm::vec3(-10.0f, 5.0f, 0.0f),
         1.0f,
-        glm::vec3(0.0f),
-        1000.0,
         1.0f,
-        false);
+        10000.0f);
 }
 
 void Simulation::initInputBindings(InputManager& inputManager) {
@@ -137,8 +142,8 @@ void Simulation::initInputBindings(InputManager& inputManager) {
         cameraPos + 10.0f * cameraForward,
         1.0f,
         15.0f * cameraForward,
-        1000.0f,
-        1.0f,
+        100000.0f,
+        50.0f,
         false);
   });
 
@@ -149,7 +154,7 @@ void Simulation::initInputBindings(InputManager& inputManager) {
         cameraPos + 10.0f * cameraForward,
         1.0f,
         1.0f,
-        10000.0f);
+        1000000.0f);
   });
 
   inputManager.addKeyBinding({GLFW_KEY_H, GLFW_PRESS, 0}, [this]() {
@@ -157,25 +162,22 @@ void Simulation::initInputBindings(InputManager& inputManager) {
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
     this->_solver.createShapeMatchingBox(
         cameraPos + 10.0f * cameraForward,
-        15,
-        15,
-        15,
+        3,
+        10,
+        3,
         1.0f,
         15.0f * cameraForward,
-        1000.0f);
+        100000.0f);
   });
 
   inputManager.addKeyBinding({GLFW_KEY_J, GLFW_PRESS, 0}, [this]() {
     glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
-    this->_solver.createShapeMatchingBox(
+    this->_solver.createShapeMatchingSheet(
         cameraPos + 10.0f * cameraForward,
-        3,
-        3,
-        3,
         1.0f,
         15.0f * cameraForward,
-        1000.0f);
+        10000.0f);
   });
   inputManager.addKeyBinding({GLFW_KEY_1, GLFW_PRESS, 0}, [this]() {
     this->_viewMode = ViewMode::TRIANGLES;
@@ -310,7 +312,13 @@ void Simulation::_createRenderState(
         IndexBuffer(app, commandBuffer, std::move(lineIndices));
   }
 
-  std::vector<uint32_t> triIndices = this->_solver.getTriangles();
+  const std::vector<Triangle>& triangles = this->_solver.getTriangles();
+  std::vector<uint32_t> triIndices(triangles.size() * 3);
+  for (uint32_t i = 0; i < triangles.size(); ++i) {
+    triIndices[3*i] = triangles[i].nodeIds[0];
+    triIndices[3*i+1] = triangles[i].nodeIds[1];
+    triIndices[3*i+2] = triangles[i].nodeIds[2];
+  }
   if (!triIndices.empty()) {
     this->_trianglesIndexBuffer =
         IndexBuffer(app, commandBuffer, std::move(triIndices));
