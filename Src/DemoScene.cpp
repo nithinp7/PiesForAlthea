@@ -199,6 +199,7 @@ void DemoScene::_createGlobalResources(
   this->_iblResources = ImageBasedLighting::createResources(
       app,
       commandBuffer,
+      // "LuxuryRoom");
       "NeoclassicalInterior");
   this->_gBufferResources = GBufferResources(app);
 
@@ -369,9 +370,9 @@ void DemoScene::_createDeferredPass(Application& app) {
         .setDepthTesting(false)
 
         // Vertex shader
-        .addVertexShader(GProjectDirectory + "/Shaders/DeferredPass.vert")
+        .addVertexShader(GEngineDirectory + "/Shaders/DeferredPass.vert")
         // Fragment shader
-        .addFragmentShader(GProjectDirectory + "/Shaders/DeferredPass.frag")
+        .addFragmentShader(GEngineDirectory + "/Shaders/DeferredPass.frag")
 
         // Pipeline resource layouts
         .layoutBuilder

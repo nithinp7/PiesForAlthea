@@ -104,12 +104,30 @@ Simulation::Simulation() {
   solverOptions.gridSpacing = 1.0f;
 
   this->_solver = Solver(solverOptions);
-  this->_solver.createBox(glm::vec3(-10.0f, 5.0f, 0.0f), 1.0f, 1.0f);
+  this->_solver.createTetBox(
+        glm::vec3(-10.0f, 5.0f, 0.0f),
+        1.0f,
+        glm::vec3(0.0f),
+        1000.0,
+        1.0f,
+        false);
 }
 
 void Simulation::initInputBindings(InputManager& inputManager) {
   inputManager.addKeyBinding({GLFW_KEY_C, GLFW_PRESS, 0}, [this]() {
     this->_solver.clear();
+  });
+  
+  inputManager.addKeyBinding({GLFW_KEY_V, GLFW_PRESS, 0}, [this]() {
+    glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
+    glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
+    this->_solver.createTetBox(
+        cameraPos + 10.0f * cameraForward,
+        1.0f,
+        glm::vec3(0.0f),
+        1000.0,
+        1.0f,
+        true);
   });
 
   inputManager.addKeyBinding({GLFW_KEY_B, GLFW_PRESS, 0}, [this]() {
@@ -118,14 +136,20 @@ void Simulation::initInputBindings(InputManager& inputManager) {
     this->_solver.createTetBox(
         cameraPos + 10.0f * cameraForward,
         1.0f,
-        10.0f * cameraForward,
-        0.85f);
+        15.0f * cameraForward,
+        1000.0f,
+        1.0f,
+        false);
   });
 
   inputManager.addKeyBinding({GLFW_KEY_N, GLFW_PRESS, 0}, [this]() {
     glm::vec3 cameraPos = glm::vec3(this->_cameraTransform[3]);
     glm::vec3 cameraForward = -glm::vec3(this->_cameraTransform[2]);
-    this->_solver.createSheet(cameraPos + 10.0f * cameraForward, 1.0f, 0.85f);
+    this->_solver.createSheet(
+        cameraPos + 10.0f * cameraForward,
+        1.0f,
+        1.0f,
+        10000.0f);
   });
 
   inputManager.addKeyBinding({GLFW_KEY_1, GLFW_PRESS, 0}, [this]() {
